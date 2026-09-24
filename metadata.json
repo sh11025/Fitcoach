@@ -1,0 +1,6 @@
+{
+  "name": "FitCoach - AI 자기소개서 코치",
+  "description": "채용공고와 내 경험을 비교 분석하여 무엇을 강조하고 보완해야 하는지 가이드하는 AI 자기소개서 코치 서비스",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
