@@ -11,6 +11,7 @@ import {
   RefreshCw,
   HelpCircle,
   ShieldCheck,
+  ShieldAlert,
   Zap
 } from 'lucide-react';
 import {
@@ -20,6 +21,7 @@ import {
   DEFAULT_AI_SETTINGS,
   MODEL_CATALOG
 } from '../../types/aiSettings';
+import { GoogleGenAI } from '@google/genai';
 
 interface Props {
   isOpen: boolean;
@@ -51,24 +53,31 @@ export const AISettingsModal: React.FC<Props> = ({
     }));
   };
 
-  const handleTestConnection = () => {
-    setTestStatus('testing');
-    setTestMessage('API 엔드포인트 및 인증 키를 확인 중입니다...');
+  const handleTestConnection = async () => {
+    if (!form.apiKey || form.apiKey.trim().length === 0) {
+      setTestStatus('failed');
+      setTestMessage('오류: 테스트를 위해 먼저 Gemini API Key를 입력해 주세요.');
+      return;
+    }
 
-    setTimeout(() => {
-      // If user typed custom key or using server runtime
-      if (form.apiKey.trim().length > 0 || form.provider === 'gemini') {
-        setTestStatus('success');
-        setTestMessage(
-          form.apiKey.trim().length > 0
-            ? `성공: [${form.provider.toUpperCase()} / ${form.model}] API 연결이 정상 확인되었습니다.`
-            : `성공: 시스템 내장 Gemini API 키로 환경이 활성화되었습니다.`
-        );
-      } else {
-        setTestStatus('failed');
-        setTestMessage('오류: 유효한 API Key를 입력해주시거나 Gemini 기본 엔진을 선택해주세요.');
-      }
-    }, 700);
+    setTestStatus('testing');
+    setTestMessage('Google Gemini API와 직접 통신하여 키 유효성을 확인 중입니다...');
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: form.apiKey.trim() });
+      await ai.models.generateContent({
+        model: 'gemini-flash-latest',
+        contents: 'ping',
+        config: { maxOutputTokens: 1 }
+      });
+      setTestStatus('success');
+      setTestMessage(`성공: [${form.provider.toUpperCase()} / ${form.model}] 브라우저 직접 연결 및 키 인증이 정상 확인되었습니다.`);
+    } catch (err: any) {
+      setTestStatus('failed');
+      const msg = err?.message || '인증 실패';
+      const safeMsg = msg.replace(/key=[a-zA-Z0-9_\-]+/gi, 'key=***');
+      setTestMessage(`연결 실패: API 키가 유효하지 않거나 네트워크 오류가 발생했습니다. (${safeMsg})`);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -250,23 +259,21 @@ export const AISettingsModal: React.FC<Props> = ({
                     <Key className="w-3.5 h-3.5 text-slate-500" />
                     <span>{form.provider.toUpperCase()} API Key</span>
                   </label>
-                  {form.provider === 'gemini' && (
-                    <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>공란 시 시스템 기본 키 사용</span>
-                    </span>
-                  )}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-blue-600 hover:text-blue-700 underline font-medium"
+                  >
+                    Google AI Studio에서 무료 발급
+                  </a>
                 </div>
                 <div className="relative">
                   <input
                     type={showKey ? 'text' : 'password'}
                     value={form.apiKey}
                     onChange={(e) => setForm((prev) => ({ ...prev, apiKey: e.target.value }))}
-                    placeholder={
-                      form.provider === 'gemini'
-                        ? 'AI Studio 또는 Google Cloud Gemini API Key 입력 (미입력 시 기본 엔진)'
-                        : 'sk-...'
-                    }
+                    placeholder="AI Studio에서 발급받은 Gemini API Key 입력 (AIzaSy...)"
                     className="w-full text-xs font-mono bg-white border border-slate-300 rounded-lg px-3 py-2 pr-10 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                   <button
@@ -278,9 +285,30 @@ export const AISettingsModal: React.FC<Props> = ({
                     {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  입력된 API Key는 브라우저 로컬 세션에만 안전하게 보관되며 외부 서버로 무단 반출되지 않습니다.
-                </p>
+
+                {/* Remember API Key checkbox */}
+                <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!form.rememberApiKey}
+                    onChange={(e) => setForm((prev) => ({ ...prev, rememberApiKey: e.target.checked }))}
+                    className="w-3.5 h-3.5 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <span className="text-[11px] text-slate-600">
+                    현재 브라우저에 API Key 기억하기 (체크 해제 시 sessionStorage에만 유지되며 탭/브라우저 종료 시 자동 파기)
+                  </span>
+                </label>
+
+                {/* Security Notice */}
+                <div className="mt-2.5 p-2.5 bg-amber-50/80 border border-amber-200/80 rounded-lg text-[11px] text-amber-900 leading-relaxed">
+                  <p className="font-semibold flex items-center gap-1.5 text-amber-950 mb-0.5">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>보안 및 개인정보 안내</span>
+                  </p>
+                  <span>
+                    API Key는 별도의 백엔드 서버를 거치지 않고 오직 이 브라우저에서 Google Gemini API 호출에만 직접 사용됩니다. 공용 PC나 타인과 공유하는 브라우저에서는 API Key를 저장하지 마세요.
+                  </span>
+                </div>
               </div>
 
               {/* Custom Endpoint (if custom provider) */}

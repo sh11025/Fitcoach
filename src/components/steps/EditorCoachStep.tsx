@@ -21,6 +21,7 @@ import { CoachInsightTabs } from '../common/CoachInsightTabs';
 import { AIDetectorModal } from '../common/AIDetectorModal';
 import { analyzeStarStructure } from '../../utils/starAnalysis';
 import { analyzeReadability } from '../../utils/readabilityAnalysis';
+import { requestAiCoaching } from '../../services/geminiService';
 
 interface Props {
   jobInfo: JobInfo;
@@ -143,38 +144,34 @@ export const EditorCoachStep: React.FC<Props> = ({
     }
   };
 
-  // Real Gemini API Calling for real-time coach feedback
+  // Real Gemini API Calling for real-time coach feedback (Browser-side BYOK)
   const handleRequestAiCoaching = async () => {
+    if (!aiSettings?.apiKey || aiSettings.apiKey.trim().length === 0) {
+      setAiError('Gemini API 키가 설정되지 않았습니다. 상단 헤더의 [AI 환경설정]에서 본인의 API Key를 입력하시면 실시간 맞춤 코칭을 받으실 수 있습니다.');
+      return;
+    }
+
     setIsAiLoading(true);
     setAiError(null);
 
     try {
-      const response = await fetch('/api/ai/coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftText,
-          jobInfo,
-          coachingStrictness: aiSettings?.coachingStrictness || 'balanced',
-          temperature: aiSettings?.temperature || 0.7,
-          maxOutputTokens: aiSettings?.maxOutputTokens || 2048,
-          model: aiSettings?.model || 'gemini-flash-latest',
-          apiKey: aiSettings?.apiKey
-        })
+      const data = await requestAiCoaching({
+        draftText,
+        jobInfo,
+        coachingStrictness: aiSettings?.coachingStrictness || 'balanced',
+        temperature: aiSettings?.temperature || 0.7,
+        maxOutputTokens: aiSettings?.maxOutputTokens || 2048,
+        model: aiSettings?.model || 'gemini-flash-latest',
+        apiKey: aiSettings.apiKey
       });
 
-      if (!response.ok) {
-        throw new Error('AI 코치 서버 응답 실패');
-      }
-
-      const data = await response.json();
       if (data.feedbacks && Array.isArray(data.feedbacks) && data.feedbacks.length > 0) {
         setCurrentFeedbacks(data.feedbacks);
         setSelectedFeedbackId(data.feedbacks[0].id);
       }
     } catch (err: any) {
-      console.warn('AI coaching call failed, keeping current feedbacks:', err);
-      setAiError('AI 분석 호출 중 일시적 오류가 발생했습니다. (기존 피드백 유지)');
+      const safeMsg = (err?.message || 'AI 코칭 호출 중 오류가 발생했습니다.').replace(/key=[a-zA-Z0-9_\-]+/gi, 'key=***');
+      setAiError(safeMsg);
     } finally {
       setIsAiLoading(false);
     }

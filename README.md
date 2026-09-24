@@ -66,44 +66,50 @@ flowchart LR
 
 ## Tech Stack
 
-### Frontend
+### Frontend & Core
 - **React 19**
 - **TypeScript**
 - **Vite**
 - **Tailwind CSS (v4)**
 - **Lucide React** (아이콘)
 
-### Backend
-- **Node.js (v18+)**
-- **Express**
+### Client-side AI
+- **Google Gemini API** (`@google/genai` Web SDK)
+- 모델: `gemini-flash-latest`, `gemini-3.8-flash`, `gemini-3.1-pro-preview`, `gemini-3.1-flash-lite`
 
-### AI
-- **Google Gemini API** (`@google/genai`)
+### Deployment & CI/CD
+- **GitHub Pages** (Static Web Application 호스팅)
+- **GitHub Actions** (Push 시 자동 빌드 & 배포 파이프라인)
 
 ---
 
 ## Architecture
 
+FitCoach는 별도의 백엔드 서버나 외부 데이터베이스 없이 브라우저에서 전 과정이 완결되는 **서버리스 정적 웹 애플리케이션 (Static Web App)**입니다.
+
 ```text
-┌─────────────────────────┐
-│   React Frontend (SPA)  │
-│  (Vite + Tailwind CSS)  │
-└────────────┬────────────┘
-             │ HTTP REST API (/api/ai/coach, /api/ai/detect)
-             ▼
-┌─────────────────────────┐
-│  Node.js Express Server │
-│       (server.ts)       │
-└────────────┬────────────┘
-             │ Google Gen AI SDK
-             ▼
-┌─────────────────────────┐
-│    Google Gemini API    │
-└─────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│            Client Browser (Static Web App)             │
+│  ┌────────────────────────┐  ┌──────────────────────┐  │
+│  │  React 19 + Tailwind   │  │  sessionStorage /    │  │
+│  │  Editor & Coaching UI  │  │  localStorage Cache  │  │
+│  └───────────┬────────────┘  └──────────┬───────────┘  │
+│              │                          │              │
+│              ▼                          ▼              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │      Gemini Service (@google/genai Web SDK)      │  │
+│  │      - BYOK (Bring Your Own Key) 직접 통신       │  │
+│  └──────────────────────────┬───────────────────────┘  │
+└─────────────────────────────┼──────────────────────────┘
+                              │ HTTPS REST (Direct)
+                              ▼
+               ┌─────────────────────────────┐
+               │      Google Gemini API      │
+               └─────────────────────────────┘
 ```
 
-- 클라이언트 브라우저 번들에 Gemini API 키가 노출되지 않도록 Express 백엔드 서버를 통해 API 호출을 중계합니다.
-- 백엔드 서버는 `process.env.GEMINI_API_KEY` 환경변수를 사용하여 Google Gemini API와 안전하게 통신합니다.
+- **BYOK (Bring Your Own Key) 구조**: 운영자의 서버 키를 공유하지 않고, 사용자가 직접 발급받은 Google Gemini API Key를 브라우저에 입력하여 Google AI 엔드포인트와 직접 통신합니다.
+- **서버리스 운영**: 별도의 백엔드 인프라가 필요하지 않아 GitHub Pages를 통해 안정적이고 비용 부담 없이 무료로 호스팅됩니다.
 
 ---
 
@@ -124,45 +130,27 @@ cd Fitcoach
 npm install
 ```
 
-### 3. 환경변수 설정
-`.env.example` 파일을 복사하여 `.env` 파일을 생성합니다.
-
-- **Mac / Linux:**
-  ```bash
-  cp .env.example .env
-  ```
-- **Windows (PowerShell):**
-  ```powershell
-  Copy-Item .env.example .env
-  ```
-
-생성된 `.env` 파일에 발급받은 Google Gemini API Key를 설정합니다:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-PORT=3000
-```
-*(참고: API 키가 없어도 화면 UI에서 직접 키를 입력하거나 기본 탑재된 샘플 데이터로 모든 기능을 테스트할 수 있습니다.)*
-
-### 4. 개발 서버 실행
+### 3. 로컬 개발 서버 실행
 ```bash
 npm run dev
 ```
-브라우저에서 `http://localhost:3000`으로 접속합니다.
+기본적으로 Vite 개발 서버(`http://localhost:5173/Fitcoach/`)가 실행됩니다.
 
-### 5. 프로덕션 빌드
+### 4. 프로덕션 정적 빌드
 ```bash
 npm run build
 ```
-빌드 결과물은 `dist/` 디렉터리에 생성됩니다.
+빌드 결과물은 GitHub Pages 호스팅용 정적 에셋 형태로 `dist/` 디렉터리에 생성됩니다.
 
 ---
 
-## Environment Variables
+## Deployment (GitHub Pages)
 
-| 변수명 | 설명 | 필수 여부 | 기본값 |
-| :--- | :--- | :---: | :--- |
-| `GEMINI_API_KEY` | Google Gemini API 인증 키 (실시간 AI 코칭 및 대필 검사 시 필요) | 선택 (미설정 시 UI에서 직접 입력 가능) | 없음 |
-| `PORT` | 백엔드 Express 서버 포트 번호 | 선택 | `3000` |
+FitCoach는 저장소의 `main` 브랜치에 변경사항이 푸시되면 [GitHub Actions](file:///.github/workflows/deploy.yml)를 통해 자동으로 빌드되어 GitHub Pages에 배포됩니다.
+
+- **배포 설정**: `.github/workflows/deploy.yml` 워크플로우에 의해 `npm ci` 및 `npm run build` 후 `dist/` 아티팩트 자동 배포
+- **Live Demo 예상 URL**: `https://sh11025.github.io/Fitcoach/`  
+  *(저장소 Settings > Pages에서 Source를 'GitHub Actions'로 지정 시 활성화)*
 
 ---
 
@@ -170,24 +158,29 @@ npm run build
 
 ```text
 Fitcoach/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml     # GitHub Pages 자동 배포 CI/CD 파이프라인
 ├── src/
 │   ├── components/        # UI 컴포넌트
 │   │   ├── common/        # 공통 모달 및 세부 카드 컴포넌트
 │   │   └── steps/         # 6단계 메인 플로우 컴포넌트
 │   ├── data/              # 초기 Mock 및 샘플 데이터
+│   ├── services/          # 브라우저 전용 Gemini API 호출 서비스
+│   │   └── geminiService.ts
 │   ├── styles/            # 테마 및 디자인 토큰 설정
 │   ├── types/             # TypeScript 인터페이스 및 타입 정의
 │   ├── utils/             # 텍스트 분석, STAR 진단, 문서 내보내기 유틸리티
 │   ├── App.tsx            # 메인 애플리케이션 컴포넌트
 │   ├── index.css          # Tailwind CSS 및 커스텀 스타일
 │   └── main.tsx           # React 엔트리포인트
-├── server.ts              # Express API 서버 및 Gemini 연동
+├── docs/
+│   └── images/            # 프로젝트 소개 프레젠테이션 이미지 (14장)
 ├── index.html             # HTML 템플릿
-├── vite.config.ts         # Vite 빌드 설정
+├── vite.config.ts         # Vite 빌드 설정 (base: '/Fitcoach/')
 ├── tsconfig.json          # TypeScript 컴파일러 설정
 ├── package.json           # 프로젝트 메타데이터 및 의존성
-├── .env.example           # 환경변수 예시 파일
-├── .gitignore             # Git 제외 파일 목록
+├── LICENSE                # 프로젝트 라이선스
 └── README.md              # 프로젝트 안내 문서
 ```
 
@@ -195,9 +188,15 @@ Fitcoach/
 
 ## AI Usage & Privacy
 
-- **AI 역할의 한계**: FitCoach의 AI는 지원자의 자기소개서를 대필하거나 문장을 자동으로 완성해주지 않으며, 오직 수정 방향과 코칭 피드백을 제공합니다.
+- **AI 역할의 한계**: FitCoach의 AI는 지원자의 자기소개서를 대필하거나 문장을 자동으로 완성해주지 않으며, 오직 수정 방향과 코칭 질문, STAR 구조 개선점만을 제안합니다.
 - **결과 검토의 책임**: AI가 생성한 조언과 피드백은 모델의 특성상 불완전할 수 있으므로, 최종적인 수정과 내용 반영 여부는 사용자가 직접 검토하고 결정해야 합니다.
-- **데이터 처리 및 보관**: 작성 중인 자기소개서 내용과 입력 정보는 외부 데이터베이스에 저장되지 않으며, 사용자의 브라우저 로컬 저장소(LocalStorage)에만 저장됩니다.
+- **데이터 처리 및 저장 정책**:
+  - 작성 중인 자기소개서 내용과 입력 정보는 외부 데이터베이스나 백엔드 서버에 수집·저장되지 않으며, 전적으로 사용자의 브라우저 로컬 저장소(LocalStorage)에만 저장됩니다.
+  - 내보내기/백업 JSON 파일에는 어떠한 경우에도 API Key가 포함되지 않습니다.
+- **API Key 관리 정책**:
+  - 입력된 Gemini API Key는 기본적으로 `sessionStorage`에만 보관되어 현재 브라우저 탭을 닫으면 메모리에서 즉시 파기됩니다.
+  - '이 브라우저에 API Key 기억하기' 옵션을 사용자가 명시적으로 켠 경우에 한하여 `localStorage`에 유지됩니다.
+  - API 호출은 브라우저에서 Google Gemini API 서버로 직접 전송되므로, 공용 PC나 공용 브라우저에서는 API Key를 저장하지 않는 것을 권장합니다.
 
 ---
 

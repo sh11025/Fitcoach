@@ -14,6 +14,7 @@ export interface AISettings {
   provider: AIProvider;
   model: string;
   apiKey: string;
+  rememberApiKey?: boolean; // false: sessionStorage (종료 시 삭제), true: localStorage
   customEndpoint?: string;
   temperature: number;
   maxOutputTokens: number;
@@ -26,6 +27,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   provider: 'gemini',
   model: 'gemini-flash-latest',
   apiKey: '',
+  rememberApiKey: false,
   customEndpoint: '',
   temperature: 0.7,
   maxOutputTokens: 2048,

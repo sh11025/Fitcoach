@@ -34,10 +34,24 @@ export default function App() {
   const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false);
   const [aiSettings, setAiSettings] = useState<AISettings>(() => {
     try {
-      const saved = localStorage.getItem('fitcoach_ai_settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Auto-upgrade deprecated or invalid models from previous sessions
+      // 1. SessionStorage has highest priority for temporary key
+      let apiKey = sessionStorage.getItem('fitcoach_api_key') || '';
+      let rememberApiKey = false;
+
+      // 2. If not in sessionStorage, check if remembered in localStorage
+      if (!apiKey) {
+        const rememberedKey = localStorage.getItem('fitcoach_api_key');
+        if (rememberedKey) {
+          apiKey = rememberedKey;
+          rememberApiKey = true;
+        }
+      }
+
+      // 3. Load non-secret preferences
+      const savedPrefs = localStorage.getItem('fitcoach_ai_settings_prefs') || localStorage.getItem('fitcoach_ai_settings');
+      let baseSettings = DEFAULT_AI_SETTINGS;
+      if (savedPrefs) {
+        const parsed = JSON.parse(savedPrefs);
         if (
           !parsed.model ||
           parsed.model.includes('1.5') ||
@@ -46,9 +60,14 @@ export default function App() {
         ) {
           parsed.model = DEFAULT_AI_SETTINGS.model;
         }
-        return { ...DEFAULT_AI_SETTINGS, ...parsed };
+        baseSettings = { ...DEFAULT_AI_SETTINGS, ...parsed };
       }
-      return DEFAULT_AI_SETTINGS;
+
+      return {
+        ...baseSettings,
+        apiKey: apiKey || baseSettings.apiKey || '',
+        rememberApiKey
+      };
     } catch {
       return DEFAULT_AI_SETTINGS;
     }
@@ -144,11 +163,30 @@ export default function App() {
 
   const currentThemeObj = THEME_PALETTES.find((t) => t.id === currentTheme) || THEME_PALETTES[0];
 
-  // Save AI Settings to local storage when changed
+  // Save AI Settings (API key stored in sessionStorage by default, localStorage if rememberApiKey is true)
   const handleSaveAISettings = (newSettings: AISettings) => {
     setAiSettings(newSettings);
     try {
-      localStorage.setItem('fitcoach_ai_settings', JSON.stringify(newSettings));
+      const { apiKey, rememberApiKey, ...prefs } = newSettings;
+      // Save non-secret preferences
+      localStorage.setItem('fitcoach_ai_settings_prefs', JSON.stringify({ ...prefs, rememberApiKey }));
+      localStorage.removeItem('fitcoach_ai_settings'); // remove legacy unpartitioned key
+
+      if (rememberApiKey) {
+        if (apiKey && apiKey.trim().length > 0) {
+          localStorage.setItem('fitcoach_api_key', apiKey.trim());
+        } else {
+          localStorage.removeItem('fitcoach_api_key');
+        }
+        sessionStorage.removeItem('fitcoach_api_key');
+      } else {
+        if (apiKey && apiKey.trim().length > 0) {
+          sessionStorage.setItem('fitcoach_api_key', apiKey.trim());
+        } else {
+          sessionStorage.removeItem('fitcoach_api_key');
+        }
+        localStorage.removeItem('fitcoach_api_key');
+      }
     } catch {
       // storage unavailable
     }

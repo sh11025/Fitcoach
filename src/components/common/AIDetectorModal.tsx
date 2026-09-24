@@ -3,6 +3,8 @@ import { ShieldCheck, AlertTriangle, CheckCircle2, RefreshCw, Sparkles } from 'l
 import { JobInfo } from '../../types';
 import { AISettings } from '../../types/aiSettings';
 
+import { requestAiDetection, DetectionResult } from '../../services/geminiService';
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -11,20 +13,7 @@ interface Props {
   aiSettings?: AISettings;
 }
 
-export interface DetectionResult {
-  humanScore: number;
-  aiLikelihood: 'low' | 'medium' | 'high';
-  riskLevel: 'safe' | 'caution' | 'danger';
-  perplexityScore: string;
-  burstinessScore: string;
-  clichePhrasesDetected: Array<{
-    phrase: string;
-    reason: string;
-    betterHumanAlternative: string;
-  }>;
-  humanTouchHighlights: string[];
-  detectorPassTip: string;
-}
+export type { DetectionResult };
 
 export const AIDetectorModal: React.FC<Props> = ({
   isOpen,
@@ -42,22 +31,16 @@ export const AIDetectorModal: React.FC<Props> = ({
     setLoading(true);
 
     try {
-      const response = await fetch('/api/ai/detect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftText,
-          jobInfo,
-          apiKey: aiSettings?.apiKey,
-          model: aiSettings?.model || 'gemini-flash-latest'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('검사 요청 실패: ' + response.statusText);
+      if (!aiSettings?.apiKey || aiSettings.apiKey.trim().length === 0) {
+        throw new Error('Gemini API Key가 등록되지 않았습니다. 로컬 휴리스틱 분석을 사용합니다.');
       }
 
-      const data = await response.json();
+      const data = await requestAiDetection({
+        draftText,
+        jobInfo,
+        apiKey: aiSettings.apiKey,
+        model: aiSettings?.model || 'gemini-flash-latest'
+      });
       setResult(data);
     } catch (err: any) {
       console.warn('API error, using local heuristic fallback:', err);
